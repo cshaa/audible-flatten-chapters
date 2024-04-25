@@ -8,4 +8,4 @@ A command line tool that converts the hierarchical chapters created by [audible-
 ## Usage
 1. `audible download --aaxc --cover --cover-size 1215 --chapter --all`
 2. `audible-flatten-chapters`
-3. `AAXtoMP3 -e:mp3 -c -D 'MP3/$title \($narrator\)' --use-audible-cli-data *.aaxc`
+3. `AAXtoMP3 -e:mp3 -c -D 'MP3/$artist/$title \($narrator\)' --use-audible-cli-data *.aaxc`
