@@ -1,0 +1,110 @@
+#!/usr/bin/env bun
+
+import { readdir, copyFile, unlink } from "node:fs/promises";
+
+if (Bun.argv.includes("--help")) {
+  console.log();
+  console.log("Usage: audible-flatten-chapters [ --no-backup | --revert ]");
+  console.log();
+  console.log(
+    "Run in a folder containing files ending with '-chapters.json' created by audible-cli " +
+      "to convert them into a flat structure that can be correctly understood by AAXtoMP3."
+  );
+  console.log();
+  console.log("Options:");
+  console.log("  --help \t show this screen");
+  console.log("  --no-backup \t do not create backup files (.bak)");
+  console.log("  --revert \t revert changes from the backup files (.bak)");
+  console.log();
+} else if (Bun.argv.includes("--revert")) {
+  await revertChanges();
+} else {
+  await flattenChapters();
+}
+
+interface Chapter {
+  length_ms: number;
+  start_offset_ms: number;
+  start_offset_sec: number;
+  title: string;
+  chapters?: Chapter[];
+}
+interface ChaptersJson {
+  content_metadata: {
+    chapter_info: {
+      brandIntroDurationMs: number;
+      brandOutroDurationMs: number;
+      is_accurate: boolean;
+      runtime_length_ms: number;
+      runtime_length_sec: number;
+      chapters: Chapter[];
+    };
+    content_reference: Record<string, any>;
+    last_position_heard: Record<string, any>;
+  };
+  response_groups: string[];
+}
+
+function flattenChapterArray(chs: Chapter[]): Chapter[] {
+  return chs.flatMap((c) => [
+    { ...c, chapters: undefined },
+    ...(c.chapters ?? []),
+  ]);
+}
+
+async function flattenChapters() {
+  const files = (await readdir(".")).filter((d) =>
+    d.endsWith("-chapters.json")
+  );
+
+  if (files.length === 0) {
+    console.log("No chapter files found.");
+    return;
+  }
+
+  for (const chaptersFile of files) {
+    if (!Bun.argv.includes("--no-backup")) {
+      // backup the original file
+      await copyFile(chaptersFile, chaptersFile + ".bak");
+    }
+
+    // parse the file
+    const original: ChaptersJson = await Bun.file(chaptersFile).json();
+
+    // flatten the chapters
+    const flattened: ChaptersJson = {
+      ...original,
+      content_metadata: {
+        ...original.content_metadata,
+        chapter_info: {
+          ...original.content_metadata.chapter_info,
+          chapters: flattenChapterArray(
+            original.content_metadata.chapter_info.chapters
+          ),
+        },
+      },
+    };
+
+    Bun.write(chaptersFile, JSON.stringify(flattened, undefined, 2));
+  }
+}
+
+async function revertChanges() {
+  const files = (await readdir(".")).filter((d) =>
+    d.endsWith("-chapters.json.bak")
+  );
+
+  if (files.length === 0) {
+    console.log("No backup files found.");
+    return;
+  }
+
+  for (const backupFile of files) {
+    const chaptersFile = backupFile.substring(
+      0,
+      backupFile.length - ".bak".length
+    );
+    await copyFile(backupFile, chaptersFile);
+    await unlink(backupFile);
+  }
+}

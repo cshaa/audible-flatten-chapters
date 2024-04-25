@@ -1,0 +1,11 @@
+{
+  "name": "audible-flatten-chapters",
+  "module": "audible-flatten-chapters",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
