@@ -48,7 +48,7 @@ interface ChaptersJson {
 function flattenChapterArray(chs: Chapter[]): Chapter[] {
   return chs.flatMap((c) => [
     { ...c, chapters: undefined },
-    ...(c.chapters ?? []),
+    ...flattenChapterArray(c.chapters ?? []),
   ]);
 }
 
