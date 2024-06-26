@@ -70,20 +70,64 @@ async function flattenChapters() {
 
     // parse the file
     const original: ChaptersJson = await Bun.file(chaptersFile).json();
+    const chapters = original.content_metadata.chapter_info;
+
+    function isObject(value) {
+      return (
+        value !== null && typeof value === "object" && !Array.isArray(value)
+      );
+    }
+
+    function isChapter(object) {
+      if (
+        object.hasOwnProperty("length_ms") &&
+        object.hasOwnProperty("start_offset_ms") &&
+        object.hasOwnProperty("start_offset_sec") &&
+        object.hasOwnProperty("title")
+      ) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+
+    let result: Chapter[] = [];
+
+    function read_chapter(ch) {
+      //Rercursively goes through an object and unpacks it.
+      //If it contains a an object with chapters, it goes there.
+      //If it is an array, it saves its elements one by one.
+      function put(ch: Chapter) {
+        result.push(ch);
+      }
+      if (isObject(ch) && ch.hasOwnProperty("chapters")) {
+        if (isChapter(ch)) {
+          //An edge case when has an array of chapters, but also is a chapter itself.
+          const obj = {
+            length_ms: ch.length_ms,
+            start_offset_ms: ch.start_offset_ms,
+            start_offset_sec: ch.start_offset_ms,
+            title: ch.title,
+          };
+          put(obj);
+        }
+        read_chapter(ch.chapters);
+      } else if (Array.isArray(ch)) {
+        for (let i = 0; i < ch.length; i++) {
+          read_chapter(ch[i]);
+        }
+      } else {
+        put(ch);
+      }
+    }
+    //console.log(chapters);
+    read_chapter(chapters);
+    //console.log(ch_flattened);
+    console.log(result);
 
     // flatten the chapters
-    const flattened: ChaptersJson = {
-      ...original,
-      content_metadata: {
-        ...original.content_metadata,
-        chapter_info: {
-          ...original.content_metadata.chapter_info,
-          chapters: flattenChapterArray(
-            original.content_metadata.chapter_info.chapters
-          ),
-        },
-      },
-    };
+    let flattened: ChaptersJson = original;
+    flattened.content_metadata.chapter_info.chapters = result;
 
     Bun.write(chaptersFile, JSON.stringify(flattened, undefined, 2));
   }
@@ -108,3 +152,4 @@ async function revertChanges() {
     await unlink(backupFile);
   }
 }
+
