@@ -45,11 +45,13 @@ interface ChaptersJson {
   response_groups: string[];
 }
 
-function flattenChapterArray(chs: Chapter[]): Chapter[] {
-  return chs.flatMap((c) => [
-    { ...c, chapters: undefined },
-    ...flattenChapterArray(c.chapters ?? []),
-  ]);
+function isChapter(object: object): object is Chapter {
+  return (
+    "length_ms" in object &&
+    "start_offset_ms" in object &&
+    "start_offset_sec" in object &&
+    "title" in object
+  );
 }
 
 async function flattenChapters() {
@@ -70,17 +72,44 @@ async function flattenChapters() {
 
     // parse the file
     const original: ChaptersJson = await Bun.file(chaptersFile).json();
+    const { chapters } = original.content_metadata.chapter_info;
 
-    // flatten the chapters
+    let result: Chapter[] = [];
+
+    /**
+     * Rercursively goes through an object and unpacks it.
+     * If it contains a an object with chapters, it goes there.
+     * If it is an array, it saves its elements one by one.
+     */
+    function readChapter(ch: Chapter | Chapter[]) {
+      if (Array.isArray(ch)) {
+        for (let i = 0; i < ch.length; i++) {
+          readChapter(ch[i]);
+        }
+      } else if (ch.chapters !== undefined) {
+        if (isChapter(ch)) {
+          // An edge case when has an array of chapters, but also is a chapter itself.
+          result.push({
+            length_ms: ch.length_ms,
+            start_offset_ms: ch.start_offset_ms,
+            start_offset_sec: ch.start_offset_ms,
+            title: ch.title,
+          });
+        }
+        readChapter(ch.chapters);
+      } else {
+        result.push(ch);
+      }
+    }
+    readChapter(chapters);
+
     const flattened: ChaptersJson = {
       ...original,
       content_metadata: {
         ...original.content_metadata,
         chapter_info: {
           ...original.content_metadata.chapter_info,
-          chapters: flattenChapterArray(
-            original.content_metadata.chapter_info.chapters
-          ),
+          chapters: result,
         },
       },
     };
